@@ -1,0 +1,49 @@
+GIT学习笔记: 
+1.命令
+git init
+git add
+git commit -m 'xxx'
+git status
+git log
+git reflog
+git reset --hard HEAD/commit id
+git checkout -- filename   放弃工作区文件的修改，将暂存区里面的内存覆盖工作区里面的内容
+git reset HEAD filename    放弃暂存区里面的修改，回退到修改前的最新版本
+git rm
+git remote -v
+git remote add origin xxx
+git remote rm origin
+git push -u origin master   -u == --set-upstream
+git checkout -b dev == git branch dev --> git checkout dev
+git branch -a 
+git merge dev
+git branch -d dev    删除dev分支(只能删除合并过的)
+git branch -D dev    删除dev分支(强行删除没有合并过的)
+git log --graph命令可以看到分支合并图。
+
+
+
+2.概念分析
+暂存区和分支存在的意义
+git init的时候自动新建第一个分支-master
+git add    只是将文件暂时保存到暂存区中
+git commit 只是提交暂存区里面的文件到对应本地分支中
+删除需要用git rm 来逻辑删除，物理删除的话 暂存区还是存在的 可以直接用 git checkout -- filename 来还原
+
+3.多人合作的顺序
+git init 
+git remote add origin xxx
+git checkout -b dev origin/dev
+......
+git push origin dev
+/
+git pull 
+git add/commit
+git push origin dev
+
+4.标签版本管理
+git tag tagName
+git tag
+git push origin tagName/--tags
+git tag -d tagName
+git push origin :refs/tags/tagName

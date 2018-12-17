@@ -1,0 +1,195 @@
+
+
+前提：
+1）本配置共有两个测试节点，分别node1.magedu.com和node2.magedu.com，相的IP地址分别为172.16.100.67和172.16.100.68；
+2）集群服务为nginx服务；
+3）提供web服务的地址为172.16.100.53，即vip；
+4）系统为CentOS 7.1 x86_64
+
+1、准备工作
+
+为了配置一台Linux主机成为HA的节点，通常需要做出如下的准备工作：
+
+1) 所有节点的主机名称和对应的IP地址解析服务可以正常工作，且每个节点的主机名称需要跟"uname -n“命令的结果保持一致；因此，需要保证两个节点上的/etc/hosts文件均为下面的内容：
+172.16.100.67   node1.magedu.com node1
+172.16.100.68   node2.magedu.com node2
+
+为了使得重新启动系统后仍能保持如上的主机名称，还分别需要在各节点执行类似如下的命令：
+
+Node1:
+# hostnamectl set-hostname node1.magedu.com
+# hostname node1.magedu.com
+
+Node2：
+# hostnamectl set-hostname node2.magedu.com
+# hostname node2.magedu.com
+
+2) 设定两个节点可以基于密钥进行ssh通信，这可以通过类似如下的命令实现：
+Node1:
+# ssh-keygen -t rsa -P ''
+# ssh-copy-id -i ~/.ssh/id_rsa.pub root@node2.magedu.com
+
+Node2:
+# ssh-keygen -t rsa -P ''
+# ssh-copy-id -i ~/.ssh/id_rsa.pub root@node1.magedu.com
+
+3) 多节点时间同步
+
+
+2、安装并启动集群
+
+2.1 安装并启动pcsd
+
+Node1 AND Node2: 
+~]# yum install -y pacemaker pcs psmisc policycoreutils-python
+~]# systemctl start pcsd.service
+~]# systemctl enable pcsd.service
+
+~]# echo 'magedu.com' | passwd --stdin hacluster
+
+2.2 配置corosync 
+
+Node1 OR Node2：
+
+~]# pcs cluster auth node1.magedu.com node2.magedu.com
+Username: hacluster
+Password: 
+node1.magedu.com: Authorized
+node2.magedu.com: Authorized
+
+~]# pcs cluster setup --name mycluster node1.magedu.com node2.magedu.com
+Shutting down pacemaker/corosync services...
+Redirecting to /bin/systemctl stop  pacemaker.service
+Redirecting to /bin/systemctl stop  corosync.service
+Killing any remaining services...
+Removing all cluster configuration files...
+node1.magedu.com: Succeeded
+node2.magedu.com: Succeeded
+
+2.3 启动集群
+
+Nod1 OR Node2：
+~]# pcs cluster start --all
+node1.magedu.com: Starting Cluster...
+node2.magedu.com: Starting Cluster...
+
+上面的命令相当于在各节点分别执行如下命令：
+~]# systemctl start corosync.service
+~]# systemctl start pacemaker.service
+
+2.4 检查集群启动状态
+
+检查各节点通信状态(显示为no faults即为OK)：
+~]# corosync-cfgtool -s
+Printing ring status.
+Local node ID 1
+RING ID 0
+	id	= 172.16.100.67
+	status	= ring 0 active with no faults
+
+检查集群成员关系及Quorum API:
+~]# corosync-cmapctl  | grep members
+runtime.totem.pg.mrp.srp.members.1.config_version (u64) = 0
+runtime.totem.pg.mrp.srp.members.1.ip (str) = r(0) ip(172.16.100.67) 
+runtime.totem.pg.mrp.srp.members.1.join_count (u32) = 1
+runtime.totem.pg.mrp.srp.members.1.status (str) = joined
+runtime.totem.pg.mrp.srp.members.2.config_version (u64) = 0
+runtime.totem.pg.mrp.srp.members.2.ip (str) = r(0) ip(172.16.100.68) 
+runtime.totem.pg.mrp.srp.members.2.join_count (u32) = 1
+runtime.totem.pg.mrp.srp.members.2.status (str) = joined
+
+~]# pcs status corosync
+
+Membership information
+----------------------
+    Nodeid      Votes Name
+         1          1 node1.magedu.com (local)
+         2          1 node2.magedu.com
+
+检查pacemaker的启动状况：
+~]# ps axf
+…… ……
+  4777 ?        Ss     0:00 /usr/sbin/pacemakerd -f
+  4778 ?        Ss     0:00  \_ /usr/libexec/pacemaker/cib
+  4779 ?        Ss     0:00  \_ /usr/libexec/pacemaker/stonithd
+  4780 ?        Ss     0:00  \_ /usr/libexec/pacemaker/lrmd
+  4781 ?        Ss     0:00  \_ /usr/libexec/pacemaker/attrd
+  4782 ?        Ss     0:00  \_ /usr/libexec/pacemaker/pengine
+  4783 ?        Ss     0:00  \_ /usr/libexec/pacemaker/crmd
+
+最后查看pacemaker集群状态：
+~]# pcs status
+Cluster name: mycluster
+WARNING: no stonith devices and stonith-enabled is not false
+Last updated: Fri Oct 16 16:06:00 2015
+Last change: Fri Oct 16 15:59:29 2015
+Stack: corosync
+Current DC: node2.magedu.com (2) - partition with quorum
+Version: 1.1.12-a14efad
+2 Nodes configured
+0 Resources configured
+
+
+Online: [ node1.magedu.com node2.magedu.com ]
+
+Full list of resources:
+
+
+PCSD Status:
+  node1.magedu.com: Online
+  node2.magedu.com: Online
+
+Daemon Status:
+  corosync: active/disabled
+  pacemaker: active/disabled
+  pcsd: active/disabled
+
+其中的WARNING信息是因为当前集群系统开启了stonith-enabled属性但却没有配置stonith设备所致。使用crm_verify命令也可检查出此错误。
+~]# crm_verify -L -V
+   error: unpack_resources: 	Resource start-up disabled since no STONITH resources have been defined
+   error: unpack_resources: 	Either configure some or disable STONITH with the stonith-enabled option
+   error: unpack_resources: 	NOTE: Clusters with shared data need STONITH to ensure data integrity
+Errors found during check: config not valid
+
+可以使用如下命令禁用集群的stonith特性，而后再次检查将不再出现错误信息。
+~]# pcs property set stonith-enabled=false
+~]# crm_verify -L -V
+
+3、pcs命令简介 
+
+pcs命令可以使用pacemaker集群的全生命周期管理，每一种管理功能均通过相应的子命令实现。
+    cluster：Configure cluster options and nodes
+	resource：Manage cluster resources
+	stonith：Configure fence devices
+	constraint：Set resource constraints
+	property：Set pacemaker properties
+	acl：Set pacemaker access control lists
+	status：View cluster status
+	config：View and manage cluster configuration
+
+
+
+4、配置集群属性
+
+corosync有许多全局配置属性，例如前面修改的stonith-enabled即为此类属性之一。pcs的property子命令可用于显示或设置集群的各属性。下面的命令可以获取其详细使用帮助。
+
+~]# pcs property --help
+
+其相关的管理命令有：
+	list|show [<property> | --all | --defaults]
+	set [--force] [--node <nodename>] <property>=[<value>]
+	unset [--node <nodename>] <property>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
