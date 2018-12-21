@@ -1,0 +1,22 @@
+/*以下纯属个人理解,有问题 call 17551320418 */
+提醒：
+	eureka中client和server其实是一个东西, 只是各自的分工和责任不同(一般都是相对应的配置关系), 所以配置上有所区别
+	server自我保护的机制 有效的防止了 网络原因引起的没有收到实例的心跳, 实现方式主要是：内部维护了一个值, 检测之前的心跳成功率, 如果该值小于85%, 如果没收到该实例心跳, 则保护该实例, 不标记可移除
+
+1.eureka-client:
+
+client 是否注册到 eureka-server中 true --> eureka.client.register-with-eureka
+client 是否拉取eureka-server中的cliekt注册清单 --> eureka.client.fetch-registry=false
+client 发送续约请求间隔时间 30s -->  eureka.instance.lease-renewal-interval-in-seconds
+client 每间隔多长时间拉取server中的注册清单来更新缓存中的 30s --> eureka.client.registry-fetch-interval-seconds
+client或者server 默认的注册中心   eureka.client.service-url.defaultZone 可以用server的高可用
+
+
+2.eureka-server:
+server是否开启自我保护机制 true --> enable-self-preservation
+server 在多长时间内没有接受到实例的心跳,则标记该实例可以被移除 90s --> eureka.instance.lease-expiration-duration-in-seconds
+server起一个线程去清理无效的实例 60s --> eureka.server.eviction-interval-timer-in-ms
+
+
+3.other:
+eureka集群中的实例名称 --> eureka.instance.hostname
