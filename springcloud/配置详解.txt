@@ -20,3 +20,5 @@ server起一个线程去清理无效的实例 60s --> eureka.server.eviction-int
 
 3.other:
 eureka集群中的实例名称 --> eureka.instance.hostname
+
+
