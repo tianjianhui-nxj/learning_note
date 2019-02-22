@@ -1,0 +1,2 @@
+1. springcloud 两种配置加载的区别 bootstrap.yml aplication.yml    前者是系统级别的配置, 后者是应用级别的配置
+2. springcloud 的自动化配置是如何实现的  深入的理解

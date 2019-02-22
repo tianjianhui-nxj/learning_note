@@ -22,3 +22,4 @@ server起一个线程去清理无效的实例 60s --> eureka.server.eviction-int
 eureka集群中的实例名称 --> eureka.instance.hostname
 
 
+zuul.AccessFilter.pre.disable  zuul设置核心过滤器失效
